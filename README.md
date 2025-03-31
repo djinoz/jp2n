@@ -16,11 +16,16 @@ A Joplin plugin that allows you to publish your notes to the Nostr network.
 
 ## CAVEATS/known BUGS
 
-1. Currently just one relay atm
-2. No images to blossom yet
+1. ~~Currently just one relay atm~~
 3. The popup dialog for publishing should go away after send, but its not. Click cancel for now.
 4. Not sure if I should .gitignore the api directory
 5. Have to add the nsec locally into the plugin settings, need to understand more Apps (not in a browser apps using a bunker or plugin or something 🤷‍♀️ )
+
+## TODO
+1. Anything from the bugs above
+2. No images to blossom yet
+3. If the note is longer than 256 characters, then prompt the option to be NIP-23 long-form content (blog post) so kind 1 stream is not polluted
+
 
 ## Installation
 
@@ -34,7 +39,7 @@ A Joplin plugin that allows you to publish your notes to the Nostr network.
 
 Before you can publish notes to Nostr, you need to configure the plugin:
 
-1. Go to Tools > Options > Joplin2Nostr Settings
+1. Go to Tools > Options > JP2N Settings
 2. Enter your NSEC private key
    - This is your Nostr private key, which starts with "nsec1"
    - If you don't have one, you can create one using a Nostr client like [Damus](https://damus.io/), [Amethyst](https://github.com/vitorpamplona/amethyst), or [Iris](https://iris.to/)
