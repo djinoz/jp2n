@@ -20,6 +20,7 @@ A Joplin plugin that allows you to publish your notes to the Nostr network.
 2. No images to blossom yet
 3. The popup dialog for publishing should go away after send, but its not. Click cancel for now.
 4. Not sure if I should .gitignore the api directory
+5. Have to add the nsec locally into the plugin settings, need to understand more Apps (not in a browser apps using a bunker or plugin or something 🤷‍♀️ )
 
 ## Installation
 
@@ -33,15 +34,19 @@ A Joplin plugin that allows you to publish your notes to the Nostr network.
 
 Before you can publish notes to Nostr, you need to configure the plugin:
 
-1. Go to Tools > Options > jp2n Settings
+1. Go to Tools > Options > Joplin2Nostr Settings
 2. Enter your NSEC private key
    - This is your Nostr private key, which starts with "nsec1"
    - If you don't have one, you can create one using a Nostr client like [Damus](https://damus.io/), [Amethyst](https://github.com/vitorpamplona/amethyst), or [Iris](https://iris.to/)
    - **IMPORTANT**: Keep your NSEC private key secure. Anyone with this key can post as you on Nostr.
-3. Enter a comma-separated list of relays
-   - Example: `wss://relay.damus.io,wss://relay.nostr.info,wss://nos.lol`
-   - These are the servers your note will be published to
-   - You can find popular relays at [nostr.watch](https://nostr.watch/)
+   - After entering a valid NSEC, your public key (npub) will be automatically derived and displayed
+3. Choose your relay source:
+   - **Manual Relays**: Enter a comma-separated list of relays in the Manual Relay List field
+     - Example: `wss://relay.damus.io,wss://relay.nostr.info,wss://nos.lol`
+     - These are the servers your note will be published to
+     - You can find popular relays at [nostr.watch](https://nostr.watch/)
+   - **NIP-65 Relays**: Use default relays (currently wss://relay.damus.io and wss://nos.lol)
+     - In future versions, this will fetch your relay list from your NIP-65 metadata
 
 ## Usage
 
