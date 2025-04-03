@@ -460,8 +460,9 @@ joplin.plugins.register({
                     return;
                 }
 
-                // Create a dialog for confirmation
-                const dialog = await joplin.views.dialogs.create('publishConfirmDialog');
+                // Create a dialog for confirmation with a unique ID
+                const dialogId = `publishConfirmDialog-${Date.now()}`;
+                const dialog = await joplin.views.dialogs.create(dialogId);
                 await joplin.views.dialogs.setButtons(dialog, [
                     {
                         id: 'cancel',
@@ -485,8 +486,9 @@ joplin.plugins.register({
                 }
 
                 try {
-                    // Create a loading dialog with a cancel button
-                    const loadingDialog = await joplin.views.dialogs.create('loadingDialog');
+                    // Create a loading dialog with a unique ID
+                    const loadingDialogId = `loadingDialog-${Date.now()}`;
+                    const loadingDialog = await joplin.views.dialogs.create(loadingDialogId);
                     await joplin.views.dialogs.setButtons(loadingDialog, [
                         {
                             id: 'cancel',
@@ -568,8 +570,9 @@ joplin.plugins.register({
                         
                         // Only show the result dialog if the loading dialog wasn't cancelled
                         if (showResultDialog) {
-                            // Create a result dialog
-                            const resultDialog = await joplin.views.dialogs.create('resultDialog');
+                            // Create a result dialog with a unique ID
+                            const resultDialogId = `resultDialog-${Date.now()}`;
+                            const resultDialog = await joplin.views.dialogs.create(resultDialogId);
                             await joplin.views.dialogs.setButtons(resultDialog, [
                                 {
                                     id: 'ok',
@@ -607,8 +610,9 @@ joplin.plugins.register({
                 } catch (err: any) {
                     console.error('Error:', err);
                     
-                    // Create an error dialog
-                    const errorDialog = await joplin.views.dialogs.create('errorDialog');
+                    // Create an error dialog with a unique ID
+                    const errorDialogId = `errorDialog-${Date.now()}`;
+                    const errorDialog = await joplin.views.dialogs.create(errorDialogId);
                     await joplin.views.dialogs.setButtons(errorDialog, [
                         {
                             id: 'ok',
