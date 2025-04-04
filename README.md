@@ -20,8 +20,10 @@ A Joplin plugin that allows you to publish your notes to the Nostr network.
 
 1. ~~Currently just one relay atm~~
 3. The popup dialog for publishing should go away after send, but its not. Click cancel for now.
-4. Not sure if I should .gitignore the api directory
+4. ~~Not sure if I should .gitignore the api directory~~
 5. Have to add the nsec locally into the plugin settings, need to understand more Apps (not in a browser apps using a bunker or plugin or something 🤷‍♀️ )
+6. excessive console logging
+7. Polish it to submit to the Joplin plugins directory
 
 ## TODO
 1. Anything from the bugs above
@@ -33,7 +35,7 @@ A Joplin plugin that allows you to publish your notes to the Nostr network.
 
 1. Open Joplin
 2. Go to Tools > Options > Plugins or on MacOS Settings > Plugins 
-3. Search for "jp2n"
+3. ~~Search for "jp2n"~~ (not really, you have to build this locally and then add the .jpl file yourself, this will comelater if I get it submitted to the Joplin plugins directory)
 4. Click Install
 5. Restart Joplin
 
