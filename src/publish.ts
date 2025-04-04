@@ -1,7 +1,7 @@
 import joplin from 'api';
 import { ToolbarButtonLocation } from 'api/types';
 import { getRelays } from './settings';
-import { extractLocalImagePaths, uploadImages, replaceImageUrls } from './imageUploader';
+import { extractResourceIds, uploadResources, replaceResourceUrls } from './imageUploader';
 
 /**
  * Register the publish command and toolbar button
@@ -81,11 +81,11 @@ async function publishToNostr() {
     const enableImageUpload = await joplin.settings.value('enableImageUpload');
     const blossomServerUrl = await joplin.settings.value('blossomServerUrl');
     
-    // Count images in the note if image upload is enabled
-    let imageCount = 0;
+    // Count resources in the note if image upload is enabled
+    let resourceCount = 0;
     if (enableImageUpload && blossomServerUrl) {
-        const imagePaths = extractLocalImagePaths(note.body);
-        imageCount = imagePaths.length;
+        const resourceIds = extractResourceIds(note.body);
+        resourceCount = resourceIds.length;
     }
     
     // Create a dialog for confirmation with a unique ID
@@ -118,9 +118,9 @@ async function publishToNostr() {
             <p>Publishing to ${relays.length} relay(s)</p>
         `;
         
-        // Add image information if images are detected
-        if (imageCount > 0 && enableImageUpload) {
-            dialogHtml += `<p>${imageCount} image(s) will be uploaded to Blossom server: ${blossomServerUrl}</p>`;
+        // Add image information if resources are detected
+        if (resourceCount > 0 && enableImageUpload) {
+            dialogHtml += `<p>${resourceCount} image(s) will be uploaded to Blossom server: ${blossomServerUrl}</p>`;
         }
         
         await joplin.views.dialogs.setHtml(dialog, dialogHtml);
@@ -139,9 +139,9 @@ async function publishToNostr() {
         
         let dialogHtml = `<p>Are you sure you want to publish "${note.title}" to ${relays.length} relay(s)?</p>`;
         
-        // Add image information if images are detected
-        if (imageCount > 0 && enableImageUpload) {
-            dialogHtml += `<p>${imageCount} image(s) will be uploaded to Blossom server: ${blossomServerUrl}</p>`;
+        // Add image information if resources are detected
+        if (resourceCount > 0 && enableImageUpload) {
+            dialogHtml += `<p>${resourceCount} image(s) will be uploaded to Blossom server: ${blossomServerUrl}</p>`;
         }
         
         await joplin.views.dialogs.setHtml(dialog, dialogHtml);
@@ -218,33 +218,75 @@ async function publishToNostr() {
             
             // Handle image uploads if enabled
             if (enableImageUpload && blossomServerUrl) {
-                // Extract local image paths from the note content
-                const imagePaths = extractLocalImagePaths(noteContent);
+                // Extract resource IDs from the note content
+                const resourceIds = extractResourceIds(noteContent);
                 
-                if (imagePaths.length > 0) {
+                if (resourceIds.length > 0) {
                     // Update loading dialog to show image upload progress
                     await joplin.views.dialogs.setHtml(loadingDialog, `
-                        <p>Uploading ${imagePaths.length} image(s) to Blossom server...</p>
+                        <p>Uploading ${resourceIds.length} image(s) to Blossom server...</p>
                         <p>Please wait while your images are being uploaded.</p>
                     `);
                     
-                    console.log(`Found ${imagePaths.length} local images in note:`, imagePaths);
+                    console.log(`Found ${resourceIds.length} resources in note:`, resourceIds);
                     
-                    // Upload images to Blossom server
-                    uploadedImages = await uploadImages(imagePaths, blossomServerUrl, secretKey);
+                    // Upload resources to Blossom server
+                    uploadedImages = await uploadResources(resourceIds, blossomServerUrl, secretKey);
                     uploadedImagesCount = Object.keys(uploadedImages).length;
                     
-                    console.log(`Uploaded ${uploadedImagesCount} images:`, uploadedImages);
+                    console.log(`Uploaded ${uploadedImagesCount} resources:`, uploadedImages);
                     
-                    // Replace local image references with uploaded URLs
-                    if (uploadedImagesCount > 0) {
-                        noteContent = replaceImageUrls(noteContent, uploadedImages);
-                        console.log('Note content with replaced image URLs:', noteContent);
+                    // Check if any uploads failed
+                    if (uploadedImagesCount < resourceIds.length) {
+                        // Close the loading dialog
+                        await joplin.views.dialogs.setButtons(loadingDialog, [
+                            {
+                                id: 'close',
+                                title: 'Close',
+                            },
+                        ]);
+                        
+                        // Create a warning dialog with a unique ID
+                        const warningDialogId = `warningDialog-${Date.now()}`;
+                        const warningDialog = await joplin.views.dialogs.create(warningDialogId);
+                        
+                        await joplin.views.dialogs.setButtons(warningDialog, [
+                            {
+                                id: 'cancel',
+                                title: 'Cancel Publishing',
+                            },
+                            {
+                                id: 'proceed',
+                                title: 'Proceed Without Images',
+                            },
+                        ]);
+                        
+                        await joplin.views.dialogs.setHtml(warningDialog, `
+                            <p>Warning: Only ${uploadedImagesCount} of ${resourceIds.length} image(s) were successfully uploaded to the Blossom server.</p>
+                            <p>The failed images will not be included in the published note.</p>
+                            <p>Do you want to proceed with publishing the note without these images, or cancel the publishing process?</p>
+                        `);
+                        
+                        const warningResult = await joplin.views.dialogs.open(warningDialog);
+                        
+                        if (warningResult.id === 'cancel') {
+                            console.log('User cancelled publishing due to failed image uploads');
+                            return;
+                        }
+                        
+                        console.log('User chose to proceed without all images');
                     }
                     
-                    // Update loading dialog to show publishing progress
+                    // Replace resource references with uploaded URLs
+                    if (uploadedImagesCount > 0) {
+                        // Pass isLongForm=true for longform articles (kind 30023), false for regular notes (kind 1)
+                        noteContent = replaceResourceUrls(noteContent, uploadedImages, publishMode === 'longform');
+                        console.log('Note content with replaced resource URLs:', noteContent);
+                    }
+                    
+                    // Reopen the loading dialog to show publishing progress
                     await joplin.views.dialogs.setHtml(loadingDialog, `
-                        <p>Uploaded ${uploadedImagesCount} of ${imagePaths.length} image(s).</p>
+                        <p>Uploaded ${uploadedImagesCount} of ${resourceIds.length} image(s).</p>
                         <p>Now publishing note to Nostr...</p>
                     `);
                 }
