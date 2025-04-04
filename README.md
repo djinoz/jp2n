@@ -11,6 +11,8 @@ A Joplin plugin that allows you to publish your notes to the Nostr network.
 - Publish Joplin notes to one or more Nostr relays
 - Configure your NSEC private key for signing notes
 - Specify multiple relays to publish to
+- Upload embedded images to Blossom media servers
+- Support for both regular notes and long-form articles (NIP-23)
 - Simple one-click publishing from the editor toolbar
 - Detailed success/failure reporting
 
@@ -23,8 +25,8 @@ A Joplin plugin that allows you to publish your notes to the Nostr network.
 
 ## TODO
 1. Anything from the bugs above
-2. No images to blossom yet
-3. If the note is longer than 256 characters, then prompt the option to be NIP-23 long-form content (blog post) so kind 1 stream is not polluted
+2. ~~No images to blossom yet~~ ✅ Implemented in latest version
+3. ~~If the note is longer than 256 characters, then prompt the option to be NIP-23 long-form content (blog post) so kind 1 stream is not polluted~~ ✅ Implemented in latest version
 
 
 ## Installation
@@ -52,19 +54,31 @@ Before you can publish notes to Nostr, you need to configure the plugin:
      - You can find popular relays at [nostr.watch](https://nostr.watch/)
    - **NIP-65 Relays**: Use default relays (currently wss://relay.damus.io and wss://nos.lol)
      - In future versions, this will fetch your relay list from your NIP-65 metadata
+4. Configure image upload settings (optional):
+   - **Enable Image Upload**: Toggle this option to enable uploading images to Blossom servers
+   - **Blossom Server URL**: Enter the URL of the Blossom server to use for image uploads
+     - Default: `https://blossom.nostr.wine/upload`
+     - You can use other Blossom-compatible servers if preferred
 
 ## Usage
 
 1. Open a note you want to publish to Nostr
 2. Click the "Publish to Nostr" button in the editor toolbar (bullhorn icon)
 3. Confirm that you want to publish the note
+   - If your note contains images and image upload is enabled, you'll see how many images will be uploaded
+   - If your note is longer than 256 characters, you'll be given the option to publish as:
+     - **Regular Note**: Standard Nostr post (kind 1)
+     - **Long-form Article**: NIP-23 blog post format (kind 30023)
 4. Wait for the publishing process to complete
+   - If any image uploads fail, you'll be given the option to proceed without those images or cancel
    - You can cancel the loading dialog if you want, and the publishing will continue in the background
-5. View the results showing which relays successfully received your note
+5. View the results showing which relays successfully received your note and how many images were uploaded
 
 ## Note Format
 
 When publishing to Nostr, your note will be formatted as follows:
+
+### Regular Notes (kind 1)
 
 ```
 [Note Title]
@@ -72,7 +86,17 @@ When publishing to Nostr, your note will be formatted as follows:
 [Note Body]
 ```
 
-The note will be published as a regular Nostr text note (kind 1) with a client tag identifying it as published from the jp2n plugin.
+Regular notes will include any embedded images as direct URLs for maximum client compatibility.
+
+### Long-form Articles (kind 30023)
+
+Long-form articles follow the NIP-23 format with:
+- A unique slug derived from the title
+- The note title as the article title
+- The first paragraph or first 100 characters as the summary
+- The full note content with embedded images in Markdown format
+
+Both formats include a client tag identifying the note as published from the jp2n plugin.
 
 ## Troubleshooting
 
@@ -97,6 +121,15 @@ If publishing fails:
 - Verify that your NSEC key is valid
 - Try publishing to different relays
 - Check the detailed error messages in the result dialog
+
+### Image Upload Issues
+
+If image uploads fail:
+- Verify that the "Enable Image Upload" option is enabled in settings
+- Check that the Blossom Server URL is correct and accessible
+- Ensure your NSEC key has permission to upload to the Blossom server
+- Try a different Blossom server if the current one is unavailable
+- For large images, be patient as uploads may take longer
 
 ## Privacy and Security
 
