@@ -460,29 +460,69 @@ joplin.plugins.register({
                     return;
                 }
 
+                // Check if the note is longer than 256 characters for NIP-23 option
+                console.log('Note body length:', note.body.length);
+                const isLongNote = note.body.length > 256;
+                console.log('Is long note:', isLongNote);
+                let publishMode = 'regular'; // Default to regular note (kind 1)
+                
                 // Create a dialog for confirmation with a unique ID
                 const dialogId = `publishConfirmDialog-${Date.now()}`;
                 const dialog = await joplin.views.dialogs.create(dialogId);
-                await joplin.views.dialogs.setButtons(dialog, [
-                    {
-                        id: 'cancel',
-                        title: 'Cancel',
-                    },
-                    {
-                        id: 'publish',
-                        title: 'Publish',
-                    },
-                ]);
                 
-                await joplin.views.dialogs.setHtml(dialog, `
-                    <p>Are you sure you want to publish "${note.title}" to ${relays.length} relay(s)?</p>
-                `);
+                if (isLongNote) {
+                    // If note is long, offer NIP-23 option
+                    await joplin.views.dialogs.setButtons(dialog, [
+                        {
+                            id: 'cancel',
+                            title: 'Cancel',
+                        },
+                        {
+                            id: 'regular',
+                            title: 'Regular Note',
+                        },
+                        {
+                            id: 'longform',
+                            title: 'Long-form Article',
+                        },
+                    ]);
+                    
+                    await joplin.views.dialogs.setHtml(dialog, `
+                        <p>Your note is longer than 256 characters. How would you like to publish it?</p>
+                        <ul>
+                            <li><strong>Regular Note:</strong> Standard Nostr post (kind 1)</li>
+                            <li><strong>Long-form Article:</strong> NIP-23 blog post format (kind 30023)</li>
+                        </ul>
+                        <p>Publishing to ${relays.length} relay(s)</p>
+                    `);
+                } else {
+                    // For shorter notes, just show regular confirmation
+                    await joplin.views.dialogs.setButtons(dialog, [
+                        {
+                            id: 'cancel',
+                            title: 'Cancel',
+                        },
+                        {
+                            id: 'regular',
+                            title: 'Publish',
+                        },
+                    ]);
+                    
+                    await joplin.views.dialogs.setHtml(dialog, `
+                        <p>Are you sure you want to publish "${note.title}" to ${relays.length} relay(s)?</p>
+                    `);
+                }
                 
                 const result = await joplin.views.dialogs.open(dialog);
+                console.log('Dialog result:', result);
                 
                 if (result.id === 'cancel') {
                     // User clicked Cancel
                     return;
+                } else if (result.id === 'longform') {
+                    // User chose long-form article
+                    publishMode = 'longform';
+                    console.log('Setting publish mode to longform');
                 }
 
                 try {
@@ -533,18 +573,62 @@ joplin.plugins.register({
                         const secretKey = decoded.data as Uint8Array; // The decoded nsec as Uint8Array
                         const pubkey = nostrTools.getPublicKey(secretKey);
                         
-                        // Create event template
-                        const event = {
-                            kind: 1, // Regular note
-                            created_at: Math.floor(Date.now() / 1000),
-                            tags: [
-                                ['client', 'joplin-plugin-jp2n'],
-                            ],
-                            content: `${note.title}\n\n${note.body}`,
-                        };
+                        // Create event template based on publish mode
+                        let event;
+                        
+                        console.log('Selected publish mode:', publishMode);
+                        
+                        if (publishMode === 'longform') {
+                            // NIP-23 long-form content (kind 30023)
+                            // Create a unique slug from the title with timestamp to avoid duplicates
+                            const timestamp = Math.floor(Date.now() / 1000).toString();
+                            const slug = note.title
+                                .toLowerCase()
+                                .replace(/[^\w\s]/g, '') // Remove special characters
+                                .replace(/\s+/g, '-')    // Replace spaces with hyphens
+                                .substring(0, 30)        // Limit length
+                                + '-' + timestamp;       // Add timestamp for uniqueness
+                            
+                            // Extract first paragraph or up to 100 chars for summary
+                            const firstParagraphEnd = note.body.indexOf('\n\n');
+                            const summary = firstParagraphEnd > 0 
+                                ? note.body.substring(0, firstParagraphEnd).trim() 
+                                : note.body.substring(0, 100).trim() + (note.body.length > 100 ? '...' : '');
+                            
+                            // Create event according to NIP-23 format
+                            // Content should be the article content directly, not a JSON object
+                            event = {
+                                kind: 30023, // NIP-23 long-form content
+                                created_at: Math.floor(Date.now() / 1000),
+                                tags: [
+                                    ['client', 'joplin-plugin-jp2n'],
+                                    ['d', slug], // Unique identifier for the article
+                                    ['title', note.title],
+                                    ['summary', summary],
+                                    ['published_at', Math.floor(Date.now() / 1000).toString()],
+                                ],
+                                content: note.body, // Direct content, not JSON
+                            };
+                            
+                            console.log('Publishing as NIP-23 long-form content');
+                            console.log('Event object:', JSON.stringify(event, null, 2));
+                        } else {
+                            // Regular note (kind 1)
+                            event = {
+                                kind: 1,
+                                created_at: Math.floor(Date.now() / 1000),
+                                tags: [
+                                    ['client', 'joplin-plugin-jp2n'],
+                                ],
+                                content: `${note.title}\n\n${note.body}`,
+                            };
+                            
+                            console.log('Publishing as regular note');
+                        }
                         
                         // Sign the event
                         const signedEvent = nostrTools.finalizeEvent(event, secretKey);
+                        console.log('Signed event:', JSON.stringify(signedEvent, null, 2));
                         
                         // Track successful publishes
                         let successCount = 0;
@@ -556,8 +640,9 @@ joplin.plugins.register({
                                 console.log(`Connecting to relay: ${relayUrl}`);
                                 const relay = await nostrTools.Relay.connect(relayUrl);
                                 
+                                console.log(`About to publish to ${relayUrl}, event kind:`, signedEvent.kind);
                                 await relay.publish(signedEvent);
-                                console.log(`Published to ${relayUrl}`);
+                                console.log(`Published to ${relayUrl}, event:`, JSON.stringify(signedEvent, null, 2));
                                 successCount++;
                                 
                                 // Close the relay connection
@@ -582,7 +667,13 @@ joplin.plugins.register({
                             
                             let resultHtml = '';
                             if (successCount > 0) {
-                                resultHtml = `<p>Note published successfully to ${successCount} relay(s)!</p>`;
+                                // Show appropriate message based on publish mode
+                                if (publishMode === 'longform') {
+                                    resultHtml = `<p>Long-form article published successfully to ${successCount} relay(s)!</p>`;
+                                } else {
+                                    resultHtml = `<p>Note published successfully to ${successCount} relay(s)!</p>`;
+                                }
+                                
                                 if (errorMessages.length > 0) {
                                     resultHtml += `<p>Failed to publish to ${errorMessages.length} relay(s):</p><ul>`;
                                     for (const error of errorMessages) {
