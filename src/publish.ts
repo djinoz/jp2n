@@ -1,6 +1,7 @@
 import joplin from 'api';
 import { ToolbarButtonLocation } from 'api/types';
 import { getRelays } from './settings';
+import { extractLocalImagePaths, uploadImages, replaceImageUrls } from './imageUploader';
 
 /**
  * Register the publish command and toolbar button
@@ -76,6 +77,17 @@ async function publishToNostr() {
     console.log('Is long note:', isLongNote);
     let publishMode = 'regular'; // Default to regular note (kind 1)
     
+    // Check if image upload is enabled
+    const enableImageUpload = await joplin.settings.value('enableImageUpload');
+    const blossomServerUrl = await joplin.settings.value('blossomServerUrl');
+    
+    // Count images in the note if image upload is enabled
+    let imageCount = 0;
+    if (enableImageUpload && blossomServerUrl) {
+        const imagePaths = extractLocalImagePaths(note.body);
+        imageCount = imagePaths.length;
+    }
+    
     // Create a dialog for confirmation with a unique ID
     const dialogId = `publishConfirmDialog-${Date.now()}`;
     const dialog = await joplin.views.dialogs.create(dialogId);
@@ -97,14 +109,21 @@ async function publishToNostr() {
             },
         ]);
         
-        await joplin.views.dialogs.setHtml(dialog, `
+        let dialogHtml = `
             <p>Your note is longer than 256 characters. How would you like to publish it?</p>
             <ul>
                 <li><strong>Regular Note:</strong> Standard Nostr post (kind 1)</li>
                 <li><strong>Long-form Article:</strong> NIP-23 blog post format (kind 30023)</li>
             </ul>
             <p>Publishing to ${relays.length} relay(s)</p>
-        `);
+        `;
+        
+        // Add image information if images are detected
+        if (imageCount > 0 && enableImageUpload) {
+            dialogHtml += `<p>${imageCount} image(s) will be uploaded to Blossom server: ${blossomServerUrl}</p>`;
+        }
+        
+        await joplin.views.dialogs.setHtml(dialog, dialogHtml);
     } else {
         // For shorter notes, just show regular confirmation
         await joplin.views.dialogs.setButtons(dialog, [
@@ -118,9 +137,14 @@ async function publishToNostr() {
             },
         ]);
         
-        await joplin.views.dialogs.setHtml(dialog, `
-            <p>Are you sure you want to publish "${note.title}" to ${relays.length} relay(s)?</p>
-        `);
+        let dialogHtml = `<p>Are you sure you want to publish "${note.title}" to ${relays.length} relay(s)?</p>`;
+        
+        // Add image information if images are detected
+        if (imageCount > 0 && enableImageUpload) {
+            dialogHtml += `<p>${imageCount} image(s) will be uploaded to Blossom server: ${blossomServerUrl}</p>`;
+        }
+        
+        await joplin.views.dialogs.setHtml(dialog, dialogHtml);
     }
     
     const result = await joplin.views.dialogs.open(dialog);
@@ -183,6 +207,49 @@ async function publishToNostr() {
             const secretKey = decoded.data as Uint8Array; // The decoded nsec as Uint8Array
             const pubkey = nostrTools.getPublicKey(secretKey);
             
+            // Check if image upload is enabled
+            const enableImageUpload = await joplin.settings.value('enableImageUpload');
+            const blossomServerUrl = await joplin.settings.value('blossomServerUrl');
+            
+            // Create a copy of the note content that we'll modify
+            let noteContent = note.body;
+            let uploadedImagesCount = 0;
+            let uploadedImages: Record<string, string> = {};
+            
+            // Handle image uploads if enabled
+            if (enableImageUpload && blossomServerUrl) {
+                // Extract local image paths from the note content
+                const imagePaths = extractLocalImagePaths(noteContent);
+                
+                if (imagePaths.length > 0) {
+                    // Update loading dialog to show image upload progress
+                    await joplin.views.dialogs.setHtml(loadingDialog, `
+                        <p>Uploading ${imagePaths.length} image(s) to Blossom server...</p>
+                        <p>Please wait while your images are being uploaded.</p>
+                    `);
+                    
+                    console.log(`Found ${imagePaths.length} local images in note:`, imagePaths);
+                    
+                    // Upload images to Blossom server
+                    uploadedImages = await uploadImages(imagePaths, blossomServerUrl, secretKey);
+                    uploadedImagesCount = Object.keys(uploadedImages).length;
+                    
+                    console.log(`Uploaded ${uploadedImagesCount} images:`, uploadedImages);
+                    
+                    // Replace local image references with uploaded URLs
+                    if (uploadedImagesCount > 0) {
+                        noteContent = replaceImageUrls(noteContent, uploadedImages);
+                        console.log('Note content with replaced image URLs:', noteContent);
+                    }
+                    
+                    // Update loading dialog to show publishing progress
+                    await joplin.views.dialogs.setHtml(loadingDialog, `
+                        <p>Uploaded ${uploadedImagesCount} of ${imagePaths.length} image(s).</p>
+                        <p>Now publishing note to Nostr...</p>
+                    `);
+                }
+            }
+            
             // Create event template based on publish mode
             let event;
             
@@ -200,10 +267,10 @@ async function publishToNostr() {
                     + '-' + timestamp;       // Add timestamp for uniqueness
                 
                 // Extract first paragraph or up to 100 chars for summary
-                const firstParagraphEnd = note.body.indexOf('\n\n');
+                const firstParagraphEnd = noteContent.indexOf('\n\n');
                 const summary = firstParagraphEnd > 0 
-                    ? note.body.substring(0, firstParagraphEnd).trim() 
-                    : note.body.substring(0, 100).trim() + (note.body.length > 100 ? '...' : '');
+                    ? noteContent.substring(0, firstParagraphEnd).trim() 
+                    : noteContent.substring(0, 100).trim() + (noteContent.length > 100 ? '...' : '');
                 
                 // Create event according to NIP-23 format
                 // Content should be the article content directly, not a JSON object
@@ -217,7 +284,7 @@ async function publishToNostr() {
                         ['summary', summary],
                         ['published_at', Math.floor(Date.now() / 1000).toString()],
                     ],
-                    content: note.body, // Direct content, not JSON
+                    content: noteContent, // Use the modified content with uploaded image URLs
                 };
                 
                 console.log('Publishing as NIP-23 long-form content');
@@ -230,7 +297,7 @@ async function publishToNostr() {
                     tags: [
                         ['client', 'joplin-plugin-jp2n'],
                     ],
-                    content: `${note.title}\n\n${note.body}`,
+                    content: `${note.title}\n\n${noteContent}`, // Use the modified content with uploaded image URLs
                 };
                 
                 console.log('Publishing as regular note');
@@ -284,6 +351,11 @@ async function publishToNostr() {
                         resultHtml = `<p>Note published successfully to ${successCount} relay(s)!</p>`;
                     }
                     
+                    // Add information about uploaded images if any
+                    if (uploadedImagesCount > 0) {
+                        resultHtml += `<p>${uploadedImagesCount} image(s) were uploaded to Blossom server and included in the published note.</p>`;
+                    }
+                    
                     if (errorMessages.length > 0) {
                         resultHtml += `<p>Failed to publish to ${errorMessages.length} relay(s):</p><ul>`;
                         for (const error of errorMessages) {
@@ -297,6 +369,11 @@ async function publishToNostr() {
                         resultHtml += `<li>${error}</li>`;
                     }
                     resultHtml += '</ul>';
+                    
+                    // Still show image upload results if any
+                    if (uploadedImagesCount > 0) {
+                        resultHtml += `<p>Note: ${uploadedImagesCount} image(s) were successfully uploaded to Blossom server, but the note could not be published.</p>`;
+                    }
                 }
                 
                 await joplin.views.dialogs.setHtml(resultDialog, resultHtml);

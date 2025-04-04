@@ -104,6 +104,30 @@ export async function registerSettings() {
         },
     });
     
+    // Register image upload settings
+    await joplin.settings.registerSettings({
+        'enableImageUpload': {
+            value: true,
+            type: SettingItemType.Bool,
+            section: 'joplin2nostrSettings',
+            public: true,
+            label: 'Enable Image Upload',
+            description: 'When enabled, local images in notes will be uploaded to a Blossom server and included in the published note.',
+        },
+    });
+    
+    // Register Blossom server URL setting
+    await joplin.settings.registerSettings({
+        'blossomServerUrl': {
+            value: 'https://blossom.nostr.wine/upload',
+            type: SettingItemType.String,
+            section: 'joplin2nostrSettings',
+            public: true,
+            label: 'Blossom Server URL',
+            description: 'URL of the Blossom server to upload images to (e.g., https://blossom.nostr.wine/upload).',
+        },
+    });
+    
     console.log('Settings registration complete.');
 }
 
