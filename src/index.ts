@@ -8,16 +8,16 @@ joplin.plugins.register({
         // Register settings
         await registerSettings();
         
-        // Initialize profile panel
-        await initProfilePanel();
+        // Initialize profile panel - commented out to disable profile panel
+        // await initProfilePanel();
         
-        // Update derived values when nsec changes
-        await updateDerivedValues();
+        // Update derived values when nsec changes - commented out to disable profile panel
+        // await updateDerivedValues();
         
-        // Watch for changes to nsec and update derived values
+        // Watch for changes to nsec and update derived values - modified to disable profile panel
         await joplin.settings.onChange(async (event) => {
             if (event.keys.includes('nsecString')) {
-                await updateDerivedValues();
+                // await updateDerivedValues();
             }
         });
 
